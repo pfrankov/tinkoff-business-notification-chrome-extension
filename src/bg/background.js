@@ -1,4 +1,3 @@
-
 function log () {
 	// DEBUG MODE OFF
 	return;
@@ -32,22 +31,26 @@ function compare(newValue, oldValue) {
 
 
 var sessionID$ = Rx.Observable.create(function (observer) {
-	log("sessionID$");
+		log("sessionID$");
 
-	chrome.cookies.get({
-		url: "https://sme.tinkoff.ru/",
-		name: "sessionID"
-	}, function (cookie) {
-		if (cookie && cookie.value) {
-			log("SessionId", cookie.value);
+		chrome.cookies.get({
+			url: "https://sme.tinkoff.ru/",
+			name: "sessionID"
+		}, function (cookie) {
+			if (cookie && cookie.value) {
+				log("SessionId", cookie.value);
 
-			observer.next(cookie.value);
-			observer.complete();
-		} else {
-			observer.error();
-		}
+				observer.next(cookie.value);
+				observer.complete();
+			} else {
+				observer.error();
+			}
+		});
+	})
+	.retryWhen(x => Rx.Observable.interval(1000))
+	.do(()=>{
+		chrome.browserAction.enable();
 	});
-}).retryWhen(x => Rx.Observable.interval(1000));
 
 var validate$ = sessionID$.flatMap(sessionID => {
 		log("validate$");
@@ -65,6 +68,8 @@ var validate$ = sessionID$.flatMap(sessionID => {
 						url: "https://sme.tinkoff.ru/",
 						name: "sessionID"
 					});
+
+					chrome.browserAction.disable();
 	
 					return Promise.reject();
 				}
@@ -150,7 +155,8 @@ var operations$ = accounts$.publishReplay()
 
 const CURRENCIES = {
 	"643": "₽",
-	"840": "$"
+	"840": "$",
+	"978": "€"
 };
 
 const TYPES = {
@@ -185,7 +191,7 @@ Rx.Observable.interval(10000)
 					title: item._accountName,
 					amount: item.amount,
 					description: item.description,
-					currency: CURRENCIES[item.authorizedInfo.authorizedCurrency]
+					currency: CURRENCIES[item.authorizedInfo.authorizedCurrency] || ""
 				};
 			}).forEach(e => {
 				notificate(e.title, [e.type, e.amount, e.currency].join("") + "\n\n" + e.description);
@@ -227,35 +233,38 @@ const STRINGS = {
 	"transitBalance": "Транзитный счёт"
 };
 
-// Rx.Observable.interval(10000)
-// 	.switchMap(() => accounts$)
-// 	.bufferCount(2,1)
-// 	.map(x => {
-// 		return unzip(x);
-// 	})
-// 	.subscribe(function(x) {
-// 		log("subscribe", x);
-// 		x.forEach(e => {
-// 			if (!e[1]) {
-// 				return;
-// 			}
+Rx.Observable.interval(10000)
+	.switchMap(() => accounts$)
+	.bufferCount(2,1)
+	.map(x => {
+		return unzip(x);
+	})
+	.subscribe(function(accounts) {
+		log("subscribe", accounts);
+		accounts.forEach(account => {
+			if (!account[1]) {
+				return;
+			}
 
-// 			let changedKeys = compare(e[0].balance, e[1].balance);
-// 			if (changedKeys.length) {
-// 				let result = changedKeys.map(e => {
-// 					return STRINGS[e];
-// 				}).join(", ");
+			let changedKeys = compare(account[0].balance, account[1].balance);
+			if (changedKeys.length) {
+				let result = changedKeys.map(property => {
+					let value = STRINGS[property] || property;
 
-// 				notificate(e[0].name, result);
-// 			}
-// 		});
-// 	});
+					value = [value, ": ", account[1].balance[property], CURRENCIES[account[1].currency] || ""].join("");
+					return value;
+				}).join("\n");
+
+				notificate(account[0].name, result);
+			}
+		});
+	});
 
 
 var badgeCount = 0;
 
 function notificate(title, message) {
-	chrome.notifications.create("tcs-notifier", {
+	chrome.notifications.create("tcs-notifier-" + Math.random(), {
 		type: "basic",
 		title: title || "",
 		message: message || "",
@@ -265,6 +274,9 @@ function notificate(title, message) {
 	badgeCount++;
 	chrome.browserAction.setBadgeText({text: `${badgeCount}`});
 }
+
+chrome.browserAction.disable();
+chrome.browserAction.setBadgeBackgroundColor({color: "#FF4081"});
 
 chrome.browserAction.onClicked.addListener(function () {
 	badgeCount = 0;
