@@ -165,6 +165,7 @@ const TYPES = {
 };
 
 Rx.Observable.interval(10000)
+	.startWith(0)
 	.switchMap(() => operations$)
 	.bufferCount(2, 1)
 	.map(x => {
@@ -234,6 +235,7 @@ const STRINGS = {
 };
 
 Rx.Observable.interval(10000)
+	.startWith(0)
 	.switchMap(() => accounts$)
 	.bufferCount(2,1)
 	.map(x => {
