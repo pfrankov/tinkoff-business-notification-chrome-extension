@@ -153,10 +153,45 @@ var operations$ = accounts$.publishReplay()
 	})
 	.retryWhen(() => Rx.Observable.interval(10000));
 
+var paymentDocuments$ = accounts$.publishReplay()
+	.refCount()
+	.flatMap(accounts => {
+		log("statistics$");
+		return companyID$.combineLatest(sessionID$, (companyID, sessionID) => {
+			let promises = accounts.map(account => {
+				return fetch(`https://sme.tinkoff.ru/api/v1/company/${companyID}/paymentDocuments/statistics?agreementNumber=${account.agreementNumber}`, {
+					headers: {
+						"sessionID": sessionID
+					}
+				})
+					.then(data => data.json())
+					.then(data => data.result)
+					.then(data => {
+
+						return {
+							balance: data.reduce((acc, item) => {
+								return acc + item.statistics.reduce((acc, item) => acc + item.aggregatedSum, 0);
+							}, 0),
+							name: account.name,
+							currency: account.currency
+						};
+					});
+			});
+
+			let promiseAll = Promise.all(promises);
+
+			return Rx.Observable.fromPromise(promiseAll);
+		})
+		.flatMap(x => x);
+	})
+	.retryWhen(() => Rx.Observable.interval(10000));
+
+
 const CURRENCIES = {
 	"643": "₽",
 	"840": "$",
-	"978": "€"
+	"978": "€",
+	"826": "£"
 };
 
 const TYPES = {
@@ -258,6 +293,33 @@ Rx.Observable.interval(10000)
 				}).join("\n");
 
 				notificate(account[0].name, result);
+			}
+		});
+	});
+
+
+Rx.Observable.interval(10000)
+	.startWith(0)
+	.switchMap(() => paymentDocuments$)
+	.bufferCount(2,1)
+	.map(x => {
+		return unzip(x);
+	})
+	.subscribe(function(payments) {
+		log("subscribe", payments);
+		payments.forEach(payment => {
+			if (!payment[1]) {
+				return;
+			}
+
+			if (payment[0].balance != payment[1].balance) {
+				let value = STRINGS["transitBalance"];
+
+				console.log(payment[1]);
+
+				value = [value, ": ", payment[1].balance, CURRENCIES[payment[1].currency] || ""].join("");
+
+				notificate(payment[0].name, value);
 			}
 		});
 	});
