@@ -19,15 +19,41 @@ function unzip(arr) {
 	}
 
 	return final;
-};
+}
 
 function compare(newValue, oldValue) {
 	return Object.keys(newValue).filter(key => {
-		return Object.keys(oldValue).filter(oldKey => {
+		return Object.keys(oldValue).filter(() => {
 			return JSON.stringify(newValue[key]) !== JSON.stringify(oldValue[key]);
 		}).length;
 	});
 }
+
+
+
+
+const CURRENCIES = {
+	"643": "₽",
+	"840": "$",
+	"978": "€",
+	"826": "£"
+};
+
+const TRANSACTION_TYPES = {
+	"Debit": "-",
+	"Credit": "+"
+};
+
+const STRINGS = {
+	"authorized": "Сумма авторизаций",
+	"otb": "Доступный остаток",
+	"balance": "Баланс",
+	"pendingRequisitions": "Списания по картотеке",
+	"pendingPayments": "Платежи в ожидании",
+	"transitBalance": "Транзитный счёт"
+};
+
+const IGNORING_ACCOUNTS = ["transitBalance"];
 
 
 var sessionID$ = Rx.Observable.create(function (observer) {
@@ -50,6 +76,7 @@ var sessionID$ = Rx.Observable.create(function (observer) {
 	.retryWhen(x => Rx.Observable.interval(1000))
 	.do(()=>{
 		chrome.browserAction.enable();
+		chrome.browserAction.setBadgeText({text: `${badgeCount || ""}`});
 	});
 
 var validate$ = sessionID$.flatMap(sessionID => {
@@ -70,7 +97,8 @@ var validate$ = sessionID$.flatMap(sessionID => {
 					});
 
 					chrome.browserAction.disable();
-	
+					chrome.browserAction.setBadgeText({text: ""});
+
 					return Promise.reject();
 				}
 				return data;
@@ -101,7 +129,7 @@ var companyID$ = sessionID$.flatMap(sessionID => {
 				return data;
 			})
 			.then(data => data.result.business.companyId);
-		
+
 		return Rx.Observable.fromPromise(promise);
 	})
 	.retryWhen(() => Rx.Observable.interval(10000))
@@ -118,7 +146,7 @@ var accounts$ = companyID$.flatMap(companyID => {
 			})
 			.then(data => data.json())
 			.then(data => data.result);
-		
+
 		return Rx.Observable.fromPromise(promise);
 	});
 }).retryWhen(() => Rx.Observable.interval(10000));
@@ -140,13 +168,13 @@ var operations$ = accounts$.publishReplay()
 							data.forEach(item => {
 								item._accountName = account.name;
 							});
-							
+
 							return data;
 						});
 				});
-		
+
 				let promiseAll = Promise.all(promises);
-		
+
 				return Rx.Observable.fromPromise(promiseAll);
 			})
 			.flatMap(x => x);
@@ -187,17 +215,6 @@ var paymentDocuments$ = accounts$.publishReplay()
 	.retryWhen(() => Rx.Observable.interval(10000));
 
 
-const CURRENCIES = {
-	"643": "₽",
-	"840": "$",
-	"978": "€",
-	"826": "£"
-};
-
-const TYPES = {
-	"Debit": "-",
-	"Credit": "+"
-};
 
 Rx.Observable.interval(10000)
 	.startWith(0)
@@ -220,10 +237,10 @@ Rx.Observable.interval(10000)
 			let newItems = account[1].filter(item => {
 				return !ids.filter(id => id === item.id).length;
 			});
-			
+
 			newItems.map(item => {
 				return {
-					type: TYPES[item.type],
+					type: TRANSACTION_TYPES[item.type],
 					title: item._accountName,
 					amount: item.amount,
 					description: item.description,
@@ -240,7 +257,7 @@ Rx.Observable.interval(10000)
 
 			existedItems.map(item => {
 					let previousItem = account[0].find(el => el.id === item.id);
-	
+
 					return {
 						item: item,
 						updated: compare(previousItem, item)
@@ -260,14 +277,6 @@ Rx.Observable.interval(10000)
 		});
 	});
 
-const STRINGS = {
-	"authorized": "Сумма авторизаций",
-	"otb": "Доступный остаток",
-	"balance": "Баланс",
-	"pendingRequisitions": "Списания по картотеке",
-	"pendingPayments": "Платежи в ожидании",
-	"transitBalance": "Транзитный счёт"
-};
 
 Rx.Observable.interval(10000)
 	.startWith(0)
@@ -283,7 +292,9 @@ Rx.Observable.interval(10000)
 				return;
 			}
 
-			let changedKeys = compare(account[0].balance, account[1].balance);
+			let changedKeys = compare(account[0].balance, account[1].balance)
+				.filter(property => !IGNORING_ACCOUNTS.includes(property));
+
 			if (changedKeys.length) {
 				let result = changedKeys.map(property => {
 					let value = STRINGS[property] || property;
@@ -314,8 +325,6 @@ Rx.Observable.interval(10000)
 
 			if (payment[0].balance != payment[1].balance) {
 				let value = STRINGS["transitBalance"];
-
-				console.log(payment[1]);
 
 				value = [value, ": ", payment[1].balance, CURRENCIES[payment[1].currency] || ""].join("");
 
