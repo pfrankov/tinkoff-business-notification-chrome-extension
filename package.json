@@ -1,0 +1,30 @@
+{
+  "name": "tinkoff-business-notification-chrome-extension",
+  "version": "1.0.0",
+  "description": "Расширение для Хрома, оповещающее о любом движении средств или обновлении существующих транзакций в онлайн-банке [Tinkoff Business](http://sme.tinkoff.ru).",
+  "scripts": {
+    "format": "prettier --write src/**/* ./*.js",
+    "build": "rollup -c"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "rxjs": "^5.5.6"
+  },
+  "devDependencies": {
+    "prettier": "^1.11.1",
+    "rollup": "^0.56.5",
+    "rollup-plugin-commonjs": "^9.0.0",
+    "rollup-plugin-json": "^2.3.0",
+    "rollup-plugin-node-resolve": "^3.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pfrankov/tinkoff-business-notification-chrome-extension.git"
+  },
+  "author": "Pavel Frankov",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pfrankov/tinkoff-business-notification-chrome-extension/issues"
+  },
+  "homepage": "https://github.com/pfrankov/tinkoff-business-notification-chrome-extension#readme"
+}
